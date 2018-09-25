@@ -1,0 +1,45 @@
+#!/bin/bash
+set -e
+shopt -s dotglob
+
+set -x
+. /opt/app-root/etc/scl_enable
+
+# Copy source code to /opt/app-root/src
+echo "---> Copy application source ..."
+mv /tmp/src/* ./
+
+# Create user-owned GOPATH
+echo "---> Initialize Go environment ..."
+mkdir ${GOPATH}
+
+# If S2I_GOPKG is set, we link app-root to its proper place in the GOPATH
+if [[ ! -z ${S2I_GOPKG} ]]; then
+    PKG="${GOPATH}/src/${S2I_GOPKG}"
+    mkdir -p $(dirname "$PKG")
+    ln -s "$(pwd)" "$PKG"
+fi
+
+echo "Go package to be built: $PKG"
+
+if [[ ! -z ${S2I_GOCMD} ]]; then
+    # Build the package
+    echo "---> Building ..."
+    go build -o ./app ${S2I_GOCMD}
+fi
+
+ls -lisa
+
+if [[ -f Makefile ]]; then
+    echo "---> Building using Makefile ..."
+
+    if [[ ! -z ${S2I_GOPKG} ]]; then
+        cd "${GOPATH}/src/${S2I_GOPKG}"
+    fi
+
+    # TODO: generalize
+    LEDGER_ENABLED=false make get_vendor_deps install
+fi
+
+echo "---> Fixing permissions ..."
+fix-permissions ./

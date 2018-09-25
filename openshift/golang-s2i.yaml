@@ -1,0 +1,58 @@
+---
+apiVersion: v1
+kind: Template
+labels:
+  app: gaia
+  template: golang-s2i
+metadata:
+  name: golang-s2i
+  template.openshift.io/bindable: "false"
+parameters:
+- displayName: Name
+  name: NAME
+  required: true
+  value: golang-s2i
+- displayName: Git Repository
+  name: GIT_REPO
+  required: true
+  value: https://github.com/certusone/testnet_deploy
+- displayName: Git Reference
+  name: GIT_REF
+  required: true
+  value: master
+
+objects:
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: ${NAME}
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      build: ${NAME}
+    name: ${NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${NAME}:1.10
+    runPolicy: Serial
+    source:
+      contextDir: openshift/golang-s2i
+      git:
+        ref: ${GIT_REF}
+        uri: ${GIT_REPO}
+      type: Git
+    strategy:
+      dockerStrategy:
+        from:
+          kind: DockerImage
+          name: registry.fedoraproject.org/f28/s2i-base
+      type: Docker
+    triggers:
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange

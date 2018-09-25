@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+
+ansible-playbook -c local -i localhost, playbook.yaml

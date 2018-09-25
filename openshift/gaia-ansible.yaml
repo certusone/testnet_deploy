@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: Template
+labels:
+  app: gaia
+  template: gaia-ansible
+metadata:
+  name: gaia-ansible
+  template.openshift.io/bindable: "false"
+parameters:
+- displayName: Name
+  name: NAME
+  required: true
+  value: gaia-ansible
+- displayName: Git Repository
+  name: GIT_REPO
+  required: true
+  value: https://github.com/certusone/testnet_deploy
+- displayName: Git Reference
+  name: GIT_REF
+  required: true
+  value: master
+
+objects:
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: ${NAME}
+  spec:
+    lookupPolicy:
+      local: true
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: ${NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${NAME}:latest
+    postCommit: {}
+    runPolicy: Serial
+    source:
+      git:
+        ref: ${GIT_REF}
+        uri: ${GIT_REPO}
+      contextDir: ansible
+      type: Git
+    strategy:
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: gaiad:latest
+      type: Source
+    triggers:
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange
+
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: ${NAME}
+
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: ${NAME}-edit
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: edit
+  subjects:
+  - kind: ServiceAccount
+    name: ${NAME}
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: ${NAME}-state
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi

@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# Colored output
+export TERM=xterm
+
+export GOPATH=${APP_ROOT}/go
+export PATH=${PATH}:${GOPATH}/bin
+
+unset BASH_ENV PROMPT_COMMAND ENV

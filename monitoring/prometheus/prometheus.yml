@@ -1,0 +1,446 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: prometheus
+  annotations:
+    "openshift.io/display-name": Prometheus
+    description: |
+      A Prometheus deployment that can be customized to monitor components and dispatch alerts. It is secure by default and can be used to monitor arbitrary clients.
+    iconClass: fa fa-cogs
+    tags: "monitoring,prometheus,alertmanager,time-series"
+parameters:
+- description: The location of the proxy image
+  name: IMAGE_PROXY
+  value: openshift/oauth-proxy:v1.0.0
+- description: The location of the prometheus image
+  name: IMAGE_PROMETHEUS
+  value: openshift/prometheus:v2.3.2
+- description: The location of the alertmanager image
+  name: IMAGE_ALERTMANAGER
+  value: openshift/prometheus-alertmanager:v0.15.1
+- description: The location of alert-buffer image
+  name: IMAGE_ALERT_BUFFER
+  value: openshift/prometheus-alert-buffer:v0.0.2
+- description: The session secret for the proxy
+  name: SESSION_SECRET
+  generate: expression
+  from: "[a-zA-Z0-9]{43}"
+
+objects:
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: prom
+    annotations:
+      serviceaccounts.openshift.io/oauth-redirectreference.prom: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"prom"}}'
+      serviceaccounts.openshift.io/oauth-redirectreference.alerts: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"prom-alerts"}}'
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: prometheus-data-claim
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+# Create a fully end-to-end TLS connection to the prometheus proxy
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: prom
+  spec:
+    to:
+      name: prom
+    tls:
+      termination: Reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/scheme: https
+      service.alpha.openshift.io/serving-cert-secret-name: prom-tls
+    labels:
+      name: prom
+    name: prom
+  spec:
+    ports:
+    - name: prometheus
+      port: 443
+      protocol: TCP
+      targetPort: 8443
+    - name: prometheusapi
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+    selector:
+      app: prom
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: prom-proxy
+  stringData:
+    session_secret: "${SESSION_SECRET}="
+- apiVersion: apps/v1beta1
+  kind: StatefulSet
+  metadata:
+    labels:
+      app: prom
+    name: prom
+  spec:
+    updateStrategy:
+      type: RollingUpdate
+    podManagementPolicy: Parallel
+    selector:
+      matchLabels:
+        app: prom
+    template:
+      metadata:
+        labels:
+          app: prom
+        name: prom
+      spec:
+        serviceAccountName: prom
+        containers:
+        # Deploy Prometheus behind an oauth proxy
+        - name: prom-proxy
+          image: ${IMAGE_PROXY}
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 8443
+            name: web
+          env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          args:
+          - -provider=openshift
+          - -https-address=:8443
+          - -http-address=
+          - -email-domain=*
+          - -upstream=http://localhost:9090
+          - -client-id=system:serviceaccount:$(NAMESPACE):prom
+          - -openshift-ca=/etc/pki/tls/cert.pem
+          - -openshift-ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          - '-openshift-sar={"resource": "namespaces", "verb": "get", "resourceName": "$(NAMESPACE)", "namespace": "$(NAMESPACE)"}'
+          - -tls-cert=/etc/tls/private/tls.crt
+          - -tls-key=/etc/tls/private/tls.key
+          - -client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
+          - -cookie-secret-file=/etc/proxy/secrets/session_secret
+          - -skip-auth-regex=^/metrics
+          volumeMounts:
+          - mountPath: /etc/tls/private
+            name: prometheus-tls
+          - mountPath: /etc/proxy/secrets
+            name: prometheus-secrets
+          - mountPath: /prometheus
+            name: prometheus-data
+
+        - name: prometheus
+          args:
+          - --storage.tsdb.retention=6h
+          - --config.file=/etc/prometheus/prometheus.yml
+          - --web.listen-address=:9090
+          image: ${IMAGE_PROMETHEUS}
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 9090
+            name: api
+          volumeMounts:
+          - mountPath: /etc/prometheus
+            name: prometheus-config
+          - mountPath: /prometheus
+            name: prometheus-data
+
+        # Deploy alertmanager behind an oauth proxy
+        # use http port=4190 and https port=9943 to differ from prom-proxy
+        - name: alerts-proxy
+          image: ${IMAGE_PROXY}
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 9443
+            name: web
+          env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          args:
+          - -provider=openshift
+          - -https-address=:9443
+          - -http-address=
+          - -email-domain=*
+          - -upstream=http://localhost:9093
+          - -client-id=system:serviceaccount:$(NAMESPACE):prom
+          - -openshift-ca=/etc/pki/tls/cert.pem
+          - -openshift-ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          - '-openshift-sar={"resource": "namespaces", "verb": "get", "resourceName": "$(NAMESPACE)", "namespace": "$(NAMESPACE)"}'
+          - -tls-cert=/etc/tls/private/tls.crt
+          - -tls-key=/etc/tls/private/tls.key
+          - -client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
+          - -cookie-secret-file=/etc/proxy/secrets/session_secret
+          volumeMounts:
+          - mountPath: /etc/tls/private
+            name: alerts-tls
+          - mountPath: /etc/proxy/secrets
+            name: alerts-secrets
+
+        - name: alertmanager
+          args:
+          - --config.file=/etc/alertmanager/alertmanager.yml
+          image: ${IMAGE_ALERTMANAGER}
+          imagePullPolicy: IfNotPresent
+          ports:
+          - containerPort: 9093
+            name: web
+          volumeMounts:
+          - mountPath: /etc/alertmanager
+            name: alertmanager-config
+          - mountPath: /alertmanager
+            name: alertmanager-data
+
+        restartPolicy: Always
+        volumes:
+        - name: prometheus-config
+          configMap:
+            defaultMode: 420
+            name: prometheus
+        - name: prometheus-secrets
+          secret:
+            secretName: prom-proxy
+        - name: prometheus-tls
+          secret:
+            secretName: prom-tls
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-data-claim
+        - name: alertmanager-config
+          configMap:
+            defaultMode: 420
+            name: alertmanager
+        - name: alerts-secrets
+          secret:
+            secretName: prom-alerts-proxy
+        - name: alerts-tls
+          secret:
+            secretName: prom-alerts-tls
+        - name: alertmanager-data
+          emptyDir: {}
+
+# Create a fully end-to-end TLS connection to the alert proxy
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: prom-alerts
+  spec:
+    to:
+      name: prom-alerts
+    tls:
+      termination: Reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      service.alpha.openshift.io/serving-cert-secret-name: prom-alerts-tls
+    labels:
+      name: prom-alerts
+    name: prom-alerts
+  spec:
+    ports:
+    - name: alerts
+      port: 443
+      protocol: TCP
+      targetPort: 9443
+    selector:
+      app: prom
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: prom-alerts-proxy
+  stringData:
+    session_secret: "${SESSION_SECRET}="
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: prometheus
+  data:
+    alerting.rules: |
+      groups:
+      - name: node_rules
+        interval: 30s # defaults to global interval
+        rules:
+        - alert: high_cpu_usage_on_node
+          for: 5m
+          expr: sum(rate(process_cpu_seconds_total[5m])) by (instance) * 100 > 70
+          annotations:
+            summary: "HIGH CPU USAGE WARNING ON '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "{{ $labels.instance }} is using a LOT of CPU. CPU usage is {{ humanize $value}}%."
+        - alert: high_memory_usage_on_node
+          for: 5m
+          expr: ((node_memory_MemTotal-node_memory_MemAvailable)/node_memory_MemTotal)*100 > 80
+          annotations:
+            summary: "HIGH MEMORY USAGE WARNING TASK ON '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "{{ $labels.instance }} is using a LOT of MEMORY. MEMORY usage is over {{ humanize $value}}%."
+        - alert: node_running_out_of_disk_space
+          for: 5m
+          expr: (node_filesystem_size{mountpoint="/"} - node_filesystem_free{mountpoint="/"}) * 100/ node_filesystem_size{mountpoint="/"} > 70
+          annotations:
+            summary: "LOW DISK SPACE WARING: NODE '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "More than 70% of disk used. Disk usage {{ humanize $value }}%."
+        - alert: disk_will_fill_in_8_hours
+          for: 5m
+          expr: predict_linear(node_filesystem_free{mountpoint="/"}[1h], 8*3600) < 0
+          annotations:
+            summary: "DISK SPACE FULL IN 8 HOURS: NODE '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "{{ $labels.instance }} is writing a lot."
+        - alert: service_down
+          for: 1m
+          expr: up < 1
+          annotations:
+            summary: "SERVICE DOWN:'{{ $labels.job }}' on '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "'{{ $labels.job }}' on {{ $labels.instance }} could not be reached by Prometheus for more than 5 minutes."
+        - alert: ping_failed
+          for: 1m
+          expr: probe_success == 0
+          annotations:
+            summary: "PING FAILED:'{{ $labels.job }}' on '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "'{{ $labels.instance }} could not be pinged for more than 1 minute. Host offline ?"
+        - alert: gaia_stuck
+          for: 1m
+          expr: changes(consensus_height[1m]) == 0
+          annotations:
+            summary: "NODE seems stuck'{{ $labels.job }}' on '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "'height of {{ $labels.job }}' on {{ $labels.instance }} did not change for more than 1 minute."
+        - alert: gaia_behind
+          for: 1m
+          expr: consensus_height - ignoring (instance) group_left max without (instance)(consensus_height) <= -5
+          annotations:
+            summary: "NODE seems behind'{{ $labels.job }}' on '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "'height of {{ $labels.job }}' on {{ $labels.instance }} is behind our best height by {{ $value }} for longer than 1minute."
+        - alert: node_reboot
+          expr: changes(node_boot_time[10m]) > 1
+          annotations:
+            summary: "NODE has rebooted'{{ $labels.job }}' on '{{ $labels.instance }}'"
+            severity: "HIGH"
+            message: "It looks like {{ $labels.instance }}' has rebooted. Was that intentional ?"
+        - alert: high_load
+          for: 2m
+          expr: node_load1 / count(node_cpu{mode="system"}) WITHOUT (cpu, mode) > 0.8
+          annotations:
+            summary: '{{ $labels.instance }} of job {{ $labels.job }} is under high load.'
+            severity: "HIGH"
+            message: "{{ $labels.instance }} has a high load. Sysload is {{ humanize $value}}."
+        - alert: validator_connection
+          for: 30s
+          expr: -p2p_peers + ignoring (instance) group_left count without (instance)(consensus_height) -1 > 0
+          annotations:
+            summary: '{{ $labels.instance }} of job {{ $labels.job }} is not connected to all other nodes.'
+            severity: "HIGH"
+            message: "{{ $labels.instance }} has a peering problem with other private nodes. Nodes missing: {{$value}}."
+        - alert: network_errors
+          for: 30s
+          expr: sum(rate(node_network_receive_errs[5m])) > 1
+          annotations:
+            summary: '{{ $labels.instance }} of job {{ $labels.job }} has network receive errors.'
+            severity: "HIGH"
+            message: "{{ $labels.instance }} has networking issues. Package error rate: {{$value}}."
+        - alert: socket_opens
+          for: 5m
+          expr: delta(node_sockstat_TCP_alloc[1m]) > 200
+          annotations:
+            summary: '{{ $labels.instance }} allocates TCP sockets at a very high rate.'
+            severity: "HIGH"
+            message: "{{ $labels.instance }} allocates very many TCP sockets. TCP sockets / second: {{$value}}."        
+    recording.rules: |
+      groups:
+      - name: aggregate_container_resources
+        rules:
+        - record: container_cpu_usage_rate
+          expr: sum without (cpu) (rate(container_cpu_usage_seconds_total[5m]))
+        - record: container_memory_rss_by_type
+          expr: container_memory_rss{id=~"/|/system.slice|/kubepods.slice"} > 0
+        - record: container_cpu_usage_percent_by_host
+          expr: sum(rate(container_cpu_usage_seconds_total{id="/"}[5m])) BY(kubernetes_io_hostname) / ON(kubernetes_io_hostname) machine_cpu_cores
+        - record: apiserver_request_count_rate_by_resources
+          expr: sum without (client,instance,contentType) (rate(apiserver_request_count[5m]))
+    prometheus.yml: |
+      rule_files:
+        - '*.rules'
+      # A scrape configuration for running Prometheus on a Kubernetes cluster.
+      # This uses separate scrape configs for cluster components (i.e. API server, node)
+      # and services to allow each to use different authentication configs.
+      #
+      # Kubernetes labels will be added as Prometheus labels on metrics via the
+      # `labelmap` relabeling action.
+      # Scrape config for API servers.
+      #
+      # Kubernetes exposes API servers as endpoints to the default/kubernetes
+      # service so this uses `endpoints` role and uses relabelling to only keep
+      # the endpoints associated with the default/kubernetes service using the
+      # default named port `https`. This works for single API server deployments as
+      # well as HA API server deployments.
+      scrape_configs:
+        - job_name: "node"
+          scrape_interval: 5s
+          static_configs:
+          - targets: ["5.83.163.203:9100"]
+        - job_name: "gaia"
+          scrape_interval: 2s
+          static_configs:
+          - targets: ["gaia-node0:26660","gaia-node1:26660","gaia-node2:26660","gaia-node3:26660"]
+        - job_name: 'blackbox'
+          metrics_path: /probe
+          params:
+            module: [icmp]  # Look for a HTTP 200 response.
+          static_configs:
+            - targets:
+              - 5.83.163.203    # Target to probe with http.
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: 5.83.163.203:9115  # The blackbox exporter's real hostname:port.
+      alerting:
+        alertmanagers:
+        - scheme: http
+          static_configs:
+          - targets:
+            - "localhost:9093"
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: alertmanager
+  data:
+    alertmanager.yml: |
+      global:
+      # The root route on which each incoming alert enters.
+      route:
+        # default route if none match
+        receiver: alert-buffer-wh
+        # The labels by which incoming alerts are grouped together. For example,
+        # multiple alerts coming in for cluster=A and alertname=LatencyHigh would
+        # be batched into a single group.
+        # TODO:
+        group_by: []
+        # All the above attributes are inherited by all child routes and can
+        # overwritten on each.
+      receivers:
+      - name: alert-buffer-wh
+        webhook_configs:
+        - url: http://localhost:9099/topics/alerts

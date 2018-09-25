@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+shopt -s dotglob
+
+# Copy source code to /opt/app-root/src
+echo "---> Copy application source ..."
+# Remove source code from previous s2i stage
+rm -rf ./*
+mv /tmp/src/* ./
+
+#echo "---> Installing OpenShift Python client for Ansible"
+# TODO: we're currently doing this in the Dockerfile to speed up repeated builds
+#pip install --user openshift

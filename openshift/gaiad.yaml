@@ -1,0 +1,63 @@
+---
+apiVersion: v1
+kind: Template
+labels:
+  app: gaia
+  template: gaiad
+metadata:
+  name: gaia
+  template.openshift.io/bindable: "false"
+parameters:
+- displayName: Name
+  name: NAME
+  required: true
+  value: gaiad
+- displayName: Git Repository
+  name: GIT_REPO
+  required: true
+  value: https://github.com/cosmos/cosmos-sdk
+- displayName: Git Reference
+  name: GIT_REF
+  required: true
+  value: develop
+
+objects:
+
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: ${NAME}
+  spec:
+    # this allows k8s objects to directly reference this image stream
+    lookupPolicy:
+      local: true
+
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: ${NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${NAME}:latest
+    postCommit: {}
+    runPolicy: Serial
+    source:
+      git:
+        ref: ${GIT_REF}
+        uri: ${GIT_REPO}
+      type: Git
+    strategy:
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: golang-s2i:1.10
+        env:
+          - name: S2I_GOPKG
+            value: github.com/cosmos/cosmos-sdk
+      type: Source
+    triggers:
+    - imageChange: {}
+      type: ImageChange
+    - type: ConfigChange

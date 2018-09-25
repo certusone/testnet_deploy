@@ -1,0 +1,489 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 0,
+    "id": 5,
+    "iteration": 1537897365846,
+    "links": [],
+    "panels": [
+      {
+        "aliasColors": {},
+        "bars": false,
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": "postgres",
+        "fill": 1,
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "id": 2,
+        "legend": {
+          "avg": false,
+          "current": false,
+          "max": false,
+          "min": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "lines": true,
+        "linewidth": 1,
+        "links": [],
+        "nullPointMode": "null",
+        "percentage": false,
+        "pointradius": 5,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": true,
+        "steppedLine": false,
+        "targets": [
+          {
+            "expr": "SELECT timestamp as time,COUNT(node) FROM peer_infos WHERE is_outbound = TRUE GROUP BY timestamp ORDER BY timestamp DESC",
+            "format": "time_series",
+            "group": [
+              {
+                "params": [
+                  "$__interval",
+                  "none"
+                ],
+                "type": "time"
+              }
+            ],
+            "intervalFactor": 1,
+            "metricColumn": "none",
+            "rawQuery": true,
+            "rawSql": "SELECT\n  $__timeGroupAlias(\"timestamp\",$__interval),\n  count(id) AS \"outbound\"\nFROM peer_infos\nWHERE\n  $__timeFilter(\"timestamp\")\n  and is_outbound = TRUE\n  and node = '$node'\nGROUP BY timestamp\nORDER BY 1",
+            "refId": "A",
+            "select": [
+              [
+                {
+                  "params": [
+                    "id"
+                  ],
+                  "type": "column"
+                },
+                {
+                  "params": [
+                    "count"
+                  ],
+                  "type": "aggregate"
+                },
+                {
+                  "params": [
+                    "inbound"
+                  ],
+                  "type": "alias"
+                }
+              ]
+            ],
+            "table": "peer_infos",
+            "timeColumn": "\"timestamp\"",
+            "timeColumnType": "timestamptz",
+            "where": [
+              {
+                "name": "$__timeFilter",
+                "params": [],
+                "type": "macro"
+              },
+              {
+                "datatype": "bool",
+                "name": "",
+                "params": [
+                  "is_outbound",
+                  "=",
+                  "FALSE"
+                ],
+                "type": "expression"
+              },
+              {
+                "datatype": "text",
+                "name": "",
+                "params": [
+                  "node",
+                  "=",
+                  "'$node'"
+                ],
+                "type": "expression"
+              }
+            ]
+          },
+          {
+            "format": "time_series",
+            "group": [],
+            "metricColumn": "none",
+            "rawQuery": true,
+            "rawSql": "SELECT\n  $__timeGroupAlias(\"timestamp\",$__interval),\n  count(id) AS \"inbound\"\nFROM peer_infos\nWHERE\n  $__timeFilter(\"timestamp\")\n  and is_outbound IS NULL\n  and node = '$node'\nGROUP BY timestamp\nORDER BY 1",
+            "refId": "B",
+            "select": [
+              [
+                {
+                  "params": [
+                    "value"
+                  ],
+                  "type": "column"
+                }
+              ]
+            ],
+            "timeColumn": "time",
+            "where": [
+              {
+                "name": "$__timeFilter",
+                "params": [],
+                "type": "macro"
+              }
+            ]
+          }
+        ],
+        "thresholds": [],
+        "timeFrom": null,
+        "timeShift": null,
+        "title": "Peer connections",
+        "tooltip": {
+          "shared": true,
+          "sort": 0,
+          "value_type": "individual"
+        },
+        "type": "graph",
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "decimals": 0,
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "yaxis": {
+          "align": false,
+          "alignLevel": null
+        }
+      },
+      {
+        "columns": [],
+        "datasource": "postgres",
+        "fontSize": "100%",
+        "gridPos": {
+          "h": 9,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "id": 4,
+        "links": [],
+        "pageSize": null,
+        "scroll": true,
+        "showHeader": true,
+        "sort": {
+          "col": 0,
+          "desc": true
+        },
+        "styles": [
+          {
+            "alias": "Time",
+            "dateFormat": "YYYY-MM-DD HH:mm:ss",
+            "pattern": "Time",
+            "type": "date"
+          },
+          {
+            "alias": "Outbound",
+            "colorMode": null,
+            "colors": [
+              "rgba(245, 54, 54, 0.9)",
+              "rgba(237, 129, 40, 0.89)",
+              "rgba(50, 172, 45, 0.97)"
+            ],
+            "dateFormat": "YYYY-MM-DD HH:mm:ss",
+            "decimals": 2,
+            "mappingType": 1,
+            "pattern": "is_outbound",
+            "thresholds": [],
+            "type": "string",
+            "unit": "short",
+            "valueMaps": [
+              {
+                "text": "Yes",
+                "value": "1"
+              },
+              {
+                "text": "No",
+                "value": ""
+              }
+            ]
+          },
+          {
+            "alias": "",
+            "colorMode": null,
+            "colors": [
+              "rgba(245, 54, 54, 0.9)",
+              "rgba(237, 129, 40, 0.89)",
+              "rgba(50, 172, 45, 0.97)"
+            ],
+            "decimals": 2,
+            "pattern": "/.*/",
+            "thresholds": [],
+            "type": "number",
+            "unit": "short"
+          }
+        ],
+        "targets": [
+          {
+            "expr": "",
+            "format": "table",
+            "group": [],
+            "intervalFactor": 1,
+            "metricColumn": "none",
+            "rawQuery": true,
+            "rawSql": "SELECT\n  moniker,listen_addr as \"Address\",is_outbound,version\nFROM peer_infos\nWHERE\n  timestamp = (select max(timestamp) from peer_infos as f where f.node = '$node')\n  and node = '$node'\nGROUP BY is_outbound,listen_addr,version,moniker",
+            "refId": "A",
+            "select": [
+              [
+                {
+                  "params": [
+                    "value"
+                  ],
+                  "type": "column"
+                }
+              ]
+            ],
+            "timeColumn": "time",
+            "where": [
+              {
+                "name": "$__timeFilter",
+                "params": [],
+                "type": "macro"
+              }
+            ]
+          }
+        ],
+        "title": "Current Peers",
+        "transform": "table",
+        "type": "table"
+      },
+      {
+        "aliasColors": {},
+        "bars": false,
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": "postgres",
+        "fill": 1,
+        "gridPos": {
+          "h": 10,
+          "w": 24,
+          "x": 0,
+          "y": 9
+        },
+        "id": 6,
+        "legend": {
+          "avg": false,
+          "current": false,
+          "max": false,
+          "min": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "lines": true,
+        "linewidth": 1,
+        "links": [],
+        "nullPointMode": "null",
+        "percentage": false,
+        "pointradius": 5,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "targets": [
+          {
+            "expr": "SELECT\n  $__timeGroupAlias(\"timestamp\",$__interval),\n  count(id) AS \"outbound\"\nFROM peer_infos\nWHERE\n  $__timeFilter(\"timestamp\")\n  and is_outbound = TRUE\n  and node = '$node'\nGROUP BY timestamp\nORDER BY 1",
+            "format": "time_series",
+            "group": [],
+            "intervalFactor": 1,
+            "metricColumn": "none",
+            "rawQuery": true,
+            "rawSql": "SELECT\n  $__timeGroupAlias(\"timestamp\",$__interval),\n  listen_addr,\n  (recv_data->>'CurRate')::int as recv,\n  (send_data->>'CurRate')::int as send\nFROM peer_infos\nWHERE\n  $__timeFilter(\"timestamp\")\n  and node = '$node'\nGROUP BY timestamp,recv_data,send_data,listen_addr\nORDER BY 1",
+            "refId": "A",
+            "select": [
+              [
+                {
+                  "params": [
+                    "value"
+                  ],
+                  "type": "column"
+                }
+              ]
+            ],
+            "timeColumn": "time",
+            "where": [
+              {
+                "name": "$__timeFilter",
+                "params": [],
+                "type": "macro"
+              }
+            ]
+          }
+        ],
+        "thresholds": [],
+        "timeFrom": null,
+        "timeShift": null,
+        "title": "Node Traffic",
+        "tooltip": {
+          "shared": true,
+          "sort": 0,
+          "value_type": "individual"
+        },
+        "type": "graph",
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "yaxis": {
+          "align": false,
+          "alignLevel": null
+        }
+      }
+    ],
+    "schemaVersion": 16,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+      "list": [
+        {
+          "allValue": null,
+          "current": {
+            "tags": [],
+            "text": "gaia-node0:26657",
+            "value": "gaia-node0:26657"
+          },
+          "datasource": "postgres",
+          "hide": 0,
+          "includeAll": false,
+          "label": null,
+          "multi": false,
+          "name": "node",
+          "options": [
+            {
+              "selected": false,
+              "text": "gaia-node2:26657",
+              "value": "gaia-node2:26657"
+            },
+            {
+              "selected": false,
+              "text": "gaia-node1:26657",
+              "value": "gaia-node1:26657"
+            },
+            {
+              "selected": false,
+              "text": "gaia-node3:26657",
+              "value": "gaia-node3:26657"
+            },
+            {
+              "selected": true,
+              "text": "gaia-node0:26657",
+              "value": "gaia-node0:26657"
+            }
+          ],
+          "query": "SELECT DISTINCT node FROM peer_infos",
+          "refresh": 0,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "tagValuesQuery": "",
+          "tags": [],
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        }
+      ]
+    },
+    "time": {
+      "from": "now-5m",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "5s",
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ],
+      "time_options": [
+        "5m",
+        "15m",
+        "1h",
+        "6h",
+        "12h",
+        "24h",
+        "2d",
+        "7d",
+        "30d"
+      ]
+    },
+    "timezone": "",
+    "title": "P2P",
+    "uid": "t4voLF0mk",
+    "version": 4
+  }

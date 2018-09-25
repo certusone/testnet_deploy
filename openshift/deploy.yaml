@@ -1,0 +1,28 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gaia-deploy
+  app: gaia
+spec:
+  parallelism: 1
+  completions: 1
+  template:
+    metadata:
+      name: gaia-deploy
+    spec:
+      volumes:
+      - name: state
+        persistentVolumeClaim:
+          claimName: gaia-ansible-state
+      containers:
+      - name: gaia-deploy
+        image: gaia-ansible:latest
+        env:
+        - name: ANSIBLE_FORCE_COLOR
+          value: 'true'
+        volumeMounts:
+          - name: state
+            mountPath: /opt/app-root/state
+      restartPolicy: OnFailure
+      serviceAccount: gaia-ansible

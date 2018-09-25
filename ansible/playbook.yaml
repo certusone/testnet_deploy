@@ -1,0 +1,131 @@
+---
+
+- hosts: localhost
+  vars:
+    gaia_namespace: "{{ ansible_env.OPENSHIFT_BUILD_NAMESPACE }}"
+    gaia_num_nodes: 4
+    state_dir: /opt/app-root/state
+  tasks:
+  - name: Delete existing testnet folder
+    file:
+      path: "{{ state_dir }}/testnet"
+      state: absent
+
+  - name: Create testnet files
+    command: >
+      /opt/app-root/go/bin/gaiad testnet
+      --v {{ gaia_num_nodes }}
+      --starting-ip-address 10.33.33.0
+      -o {{ state_dir }}/testnet
+
+  - name: Replace persistent peers
+    shell: >
+      sed -i 's/10\.33\.33\./gaia-node/g'
+      {{ state_dir }}/testnet/node*/gaiad/config/config.toml
+    args:
+      warn: no
+
+  - name: config.toml overrides
+    shell:
+      sed -i 's/^{{ item.key }} = .*/{{ item.key }} = {{ item.value }}/'
+      {{ state_dir }}/testnet/node*/gaiad/config/config.toml
+    args:
+      warn: no
+    with_dict:
+      # produce blocks as fast as we can
+      skip_timeout_commit: 'true'
+      # accept private IP ranges
+      addr_book_strict: 'false'
+      # calculated max peers
+      max_num_peers: '{{ 50 + gaia_num_nodes }}'
+      # we can later auto-configure a Prometheus server via annotations
+      prometheus: 'true'
+
+  # Headless service - we need forward DNS!
+  - name: Create node services
+    k8s:
+      state: present
+      definition:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          labels:
+            app: gaia
+            template: gaia-nodes
+          namespace: "{{ gaia_namespace }}"
+          name: gaia-node{{ item }}
+        spec:
+          clusterIP: None
+          ports:
+          - name: gaiad-peer
+            port: 26656
+            protocol: TCP
+            targetPort: 26656
+          - name: gaiad-rpc
+            port: 26657
+            protocol: TCP
+            targetPort: 26657
+          - name: gaiad-metrics
+            port: 26660
+            protocol: TCP
+            targetPort: 26660
+          selector:
+            name: gaia-node{{ item }}
+          sessionAffinity: None
+          type: ClusterIP
+
+    with_sequence: start=0 count={{ gaia_num_nodes }}
+
+  - name: Create RPC route for node1
+    k8s:
+      state: present
+      definition:
+        apiVersion: v1
+        kind: Route
+        metadata:
+          name: gaia-rpc
+          namespace: "{{ gaia_namespace }}"
+        spec:
+          port:
+            targetPort: gaiad-rpc
+          tls:
+            termination: edge
+          to:
+            kind: Service
+            name: gaia-node1
+            weight: 100
+          wildcardPolicy: None
+
+  - name: Start gaiad pods
+    k8s:
+      state: present
+      definition:
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          labels:
+            app: gaia
+            template: gaia-nodes
+            name: gaia-node{{ item }}
+          annotations:
+            prometheus.io/scrape: 'true'
+            prometheus.io/port: '26660'
+          namespace: "{{ gaia_namespace }}"
+          name: gaia-node{{ item }}
+        spec:
+          volumes:
+          - name: state
+            persistentVolumeClaim:
+              claimName: gaia-ansible-state
+          containers:
+            - name: gaia-node{{ item }}
+              image: gaiad:latest
+              volumeMounts:
+                - mountPath: /opt/app-root/state
+                  name: state
+              command:
+                - /opt/app-root/go/bin/gaiad
+                - start
+                - --home
+                - /opt/app-root/state/testnet/node{{ item }}/gaiad
+    with_sequence: start=0 count={{ gaia_num_nodes}}
