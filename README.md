@@ -93,10 +93,21 @@ If you want alerts from your alertmanager:
 
 `monitoring/prometheus/prometheus.yml`: Modify the alertmanager config according to [the Prometheus docs](https://prometheus.io/docs/alerting/configuration/)
 
+Login as admin:
+
+    oc login  # admin/admin
+
+Check out this repo:
+
+    https://github.com/certusone/testnet_deploy
+    
 This deploys our testnet:
 
+    oc new-project gaia-testnet
     ./deploy_testnet.sh
     
 This deploys everything, including our monitoring stack:
 
     ./deploy_all.sh
+
+Wait a few minutes - you can watch it in the "Builds" section in the UI.
