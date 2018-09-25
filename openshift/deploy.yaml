@@ -10,6 +10,8 @@ spec:
   template:
     metadata:
       name: gaia-deploy
+      annotations:
+        alpha.image.policy.openshift.io/resolve-names: '*'
     spec:
       volumes:
       - name: state
