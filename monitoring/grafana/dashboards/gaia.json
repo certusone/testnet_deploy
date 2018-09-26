@@ -30,7 +30,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1537962921464,
+  "iteration": 1537962921466,
   "links": [],
   "panels": [
     {
@@ -1569,7 +1569,7 @@
         "multi": true,
         "name": "targets",
         "options": [],
-        "query": "label_values(consensus_rounds,instance)",
+        "query": "label_values(consensus_height,instance)",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
