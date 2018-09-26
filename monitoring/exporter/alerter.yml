@@ -50,6 +50,8 @@ objects:
                 value: "mypwd"
               - name: "RAVEN_DSN"
                 value: "<INSERT_RAVEN_DSN>"
+              - name: "ADDRESS"
+                value: "<INSERT_VAL_ADDRESS>"
     triggers:
     - imageChangeParams:
         automatic: true

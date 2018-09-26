@@ -89,6 +89,8 @@ For Sentry alerts to work set the following variables:
 
 `monitoring/exporter/alerter.yml`: Replace `<INSERT_RAVEN_DSN>` with the RAVEN_DSN URL of your (self-)hosted Sentry instance. 
 
+Also replace `<INSERT_VAL_ADDRESS>` in the same file with the address of your validator to allow alert filtering.
+
 If you want alerts from your alertmanager:
 
 `monitoring/prometheus/prometheus.yml`: Modify the alertmanager config according to [the Prometheus docs](https://prometheus.io/docs/alerting/configuration/)
