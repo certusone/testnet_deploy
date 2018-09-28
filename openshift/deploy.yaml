@@ -10,8 +10,6 @@ spec:
   template:
     metadata:
       name: gaia-deploy
-      annotations:
-        alpha.image.policy.openshift.io/resolve-names: '*'
     spec:
       volumes:
       - name: state
@@ -19,7 +17,7 @@ spec:
           claimName: gaia-ansible-state
       containers:
       - name: gaia-deploy
-        image: gaia-ansible:latest
+        image: 172.30.1.1:5000/gaia-testnet/gaia-ansible:latest
         env:
         - name: ANSIBLE_FORCE_COLOR
           value: 'true'
