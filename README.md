@@ -78,10 +78,9 @@ Finally, boot up your cluster:
 You can now log into the web application using developer or admin/admin
 (`https://<hostname>:8443`), or log in using the CLI:
 
-    oc login https://<hostname>:8443
+    oc login https://<hostname>:8443 -u admin -p admin
 
 (the admin user is cluster administrator, whereas the developer user isn’t)
-
 
 ## Deploy our testnet
 
@@ -95,20 +94,24 @@ If you want alerts from your alertmanager:
 
 `monitoring/prometheus/prometheus.yml`: Modify the alertmanager config according to [the Prometheus docs](https://prometheus.io/docs/alerting/configuration/)
 
-Login as admin:
+SSH into the OpenShift host, then login as admin:
 
-    oc login  # admin/admin
+    oc login -u admin -p admin
 
 Check out this repo:
 
-    https://github.com/certusone/testnet_deploy
+    git clone https://github.com/certusone/testnet_deploy
+    cd testnet_deploy
     
-This deploys our testnet:
+Create a new namespace/project:
 
     oc new-project gaia-testnet
+    
+Either deploy just our testnet:
+
     ./deploy_testnet.sh
     
-This deploys everything, including our monitoring stack:
+Or deploy everything, including our monitoring stack:
 
     ./deploy_all.sh
 
