@@ -8,6 +8,9 @@ Requirements:
 - CentOS => 7.5
 - OpenShift Origin == 3.9
 
+[Subscribe to our newsletter](https://mailchi.mp/38ac109a9ab2/certusone) for updates on this project,
+insights on the upcoming Game of Stakes and more.
+
 ## Introduction
 
 We recorded this video to guide you through the (one-click) setup of your own fully monitored Cosmos network and explain how the snippets and monitoring systems can be used.
